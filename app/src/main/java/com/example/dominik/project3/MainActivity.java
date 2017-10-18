@@ -28,6 +28,8 @@ import javax.vecmath.Vector3d;
 
 import io.reactivex.Observable;
 import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.disposables.Disposable;
 
 public class MainActivity extends AppCompatActivity implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, SensorEventListener {
 
@@ -46,6 +48,8 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
     ArrayList<Tuple3d> averageAcceleration = new ArrayList<>(Collections.nCopies(MAX_SIZE, new Vector3d()));
     private SensorManager mSensorManager;
     private Sensor mSensor;
+    private CompositeDisposable task = new CompositeDisposable();
+    private Disposable updateStep = null;
 
     //================Helper functions===================
     static int clamp(int min, int max, int value) {
@@ -62,7 +66,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
         if (array.size() < howmany || howmany <= 0 || currentIndex >= array.size() || currentIndex < 0)
             throw new IllegalArgumentException("zwrong arguments");
         int start = currentIndex - howmany;
-        List<Tuple3d> result = array.subList(clamp(0, currentIndex, start), currentIndex);
+        List<Tuple3d> result = array.subList(clamp(0, currentIndex, start), currentIndex + 1);
         List<Tuple3d> spare = new ArrayList<>();
         if (start < 0)
             spare = Observable.just(array).flatMapIterable(v -> v).takeLast(start * -1 - 1)
@@ -116,6 +120,9 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
     protected void onDestroy() {
         super.onDestroy();
         if (wakeLock != null) wakeLock.release();
+        task.clear();
+        if (updateStep != null)
+        updateStep.dispose();
     }
 
     @Override
@@ -135,6 +142,8 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
     }
 
+
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -142,14 +151,13 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
             mSensorManager.registerListener(this, mSensor, SensorManager.SENSOR_DELAY_UI); //60000 micro miliseconds delay
         }
         //update text every 200 ms
-        Observable.interval(200, TimeUnit.MILLISECONDS).observeOn(AndroidSchedulers.mainThread()).subscribe(v -> textView.setText(Integer.toString(count)));
+        task.add(Observable.interval(200, TimeUnit.MILLISECONDS).observeOn(AndroidSchedulers.mainThread()).subscribe(v -> textView.setText(Integer.toString(count))));
 
         //check step every 200 ms
-        Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(l -> {
+        updateStep = Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(l -> {
             if (startCount) {
                 List<Tuple3d> all = getLast(50, index, new ArrayList<>(averageAcceleration));
                 List<Tuple3d> current = getLast(3, all.size() - 1, all);
-
                 //get max from the last 50 data points
                 Tuple3d max = Observable.just(all)
                         .flatMapIterable(v -> v).reduce((tuple3d, tuple3d2) -> new Vector3d(Math.max(tuple3d.x, tuple3d2.x),
