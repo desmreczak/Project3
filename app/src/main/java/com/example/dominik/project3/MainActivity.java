@@ -2,8 +2,10 @@ package com.example.dominik.project3;
 
 import android.Manifest;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
@@ -22,13 +24,16 @@ import android.util.Log;
 import android.view.MenuItem;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.ActivityRecognition;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -42,6 +47,7 @@ import io.reactivex.disposables.Disposable;
 
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
+import com.google.android.gms.location.DetectedActivity;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
@@ -71,7 +77,8 @@ public class MainActivity extends AppCompatActivity
         OnMapReadyCallback,
         GoogleMap.OnMapClickListener,
         GoogleMap.OnMarkerClickListener,
-        ResultCallback<Status> {
+        ResultCallback<Status>
+         {
 
     //======================== Step counting below ================================
     private final static Double THRESHOLD = 0.2;
@@ -123,6 +130,8 @@ public class MainActivity extends AppCompatActivity
         return t;
     }
 
+    Receiver receiver;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -150,6 +159,11 @@ public class MainActivity extends AppCompatActivity
 
         // initialize GoogleMaps
         initGMaps();
+
+        IntentFilter filter = new IntentFilter(ACTIVITY_RESULT);
+        filter.addCategory(Intent.CATEGORY_DEFAULT);
+        receiver = new Receiver();
+        registerReceiver(receiver, filter);
 
 
     }
@@ -317,6 +331,28 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {
 
+    }
+
+
+    public DetectedActivity currentActivity = null;
+    public long activityStart = 0;
+    public static String ACTIVITY_RESULT = "result";
+
+    class Receiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            DetectedActivity activity = intent.getParcelableExtra(ActivityRecognizedService.RESULT);
+            if (currentActivity == null) {
+                currentActivity = activity;
+                activityStart = Calendar.getInstance().getTime().getTime();
+            } else if (currentActivity != activity) {
+                long current = Calendar.getInstance().getTime().getTime();
+                Toast.makeText(MainActivity.this, String.format("You just %s for %d seconds", currentActivity.toString(), current - activityStart ), Toast.LENGTH_SHORT).show();
+                currentActivity = activity;
+                activityStart = current;
+            }
+        }
     }
 
 
