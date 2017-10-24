@@ -383,8 +383,8 @@ public class MainActivity extends AppCompatActivity
     private final int GEOFENCE_REQ_CODE = 0;
     private static final String NOTIFICATION_MSG = "NOTIFICATION MSG";
     private final int REQ_PERMISSION = 999;
-    private LatLng libraryLatLng = new LatLng(42.2742281,-71.808542);
-    private LatLng fullerLatLng = new LatLng(42.2750591,-71.8086925);
+    private LatLng libraryLatLng = new LatLng(42.274339, -71.806580);
+    private LatLng fullerLatLng = new LatLng(42.274979, -71.806607);
 
 
     // Initialize GoogleMaps
