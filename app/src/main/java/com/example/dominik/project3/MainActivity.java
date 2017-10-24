@@ -23,6 +23,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -131,6 +132,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     Receiver receiver;
+    ImageView imageView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -164,6 +166,9 @@ public class MainActivity extends AppCompatActivity
         filter.addCategory(Intent.CATEGORY_DEFAULT);
         receiver = new Receiver();
         registerReceiver(receiver, filter);
+        imageView = (ImageView) findViewById(R.id.activityImageView);
+        textView = (TextView) findViewById(R.id.activityTextView);
+
 
 
     }
@@ -346,12 +351,31 @@ public class MainActivity extends AppCompatActivity
             if (currentActivity == null) {
                 currentActivity = activity;
                 activityStart = Calendar.getInstance().getTime().getTime();
+                textView.setText("You are in " + activity.toString() + " mode");
+                imageView.setImageDrawable(getDrawable(getDrawableFrom(currentActivity)));
             } else if (currentActivity != activity) {
                 long current = Calendar.getInstance().getTime().getTime();
                 Toast.makeText(MainActivity.this, String.format("You just %s for %d seconds", currentActivity.toString(), current - activityStart ), Toast.LENGTH_SHORT).show();
                 currentActivity = activity;
                 activityStart = current;
+                textView.setText("You are in " + activity.toString() + " mode");
+                imageView.setImageDrawable(getDrawable(getDrawableFrom(currentActivity)));
+
             }
+        }
+    }
+
+    static int getDrawableFrom(DetectedActivity activity) {
+        switch (activity.getType()) {
+            case DetectedActivity.RUNNING:
+                return R.drawable.running;
+            case DetectedActivity.WALKING:
+                return R.drawable.walking;
+            case DetectedActivity.STILL:
+                return R.drawable.still;
+            default:
+                return R.drawable.still;
+
         }
     }
 
