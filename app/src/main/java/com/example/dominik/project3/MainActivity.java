@@ -530,7 +530,7 @@ public class MainActivity extends AppCompatActivity
         if ( status.isSuccess() ) {
             drawGeofence();
         } else {
-            // inform about fail
+            Log.i(TAG, "onResult (failed): " + status);
         }
     }
 
@@ -551,11 +551,9 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch ( item.getItemId() ) {
-            case R.id.geofence: {
+        if (item.getItemId() != -1) {
                 startGeofence();
                 return true;
-            }
         }
         return super.onOptionsItemSelected(item);
     }
