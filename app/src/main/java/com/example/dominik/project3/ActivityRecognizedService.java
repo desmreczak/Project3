@@ -25,15 +25,23 @@ public class ActivityRecognizedService extends IntentService {
         super(name);
     }
 
+    public static String RESULT = "result";
     @Override
     protected void onHandleIntent(Intent intent) {
         if (ActivityRecognitionResult.hasResult(intent)) {
             ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
-            handleDetectedActivities(result.getProbableActivities());
+            DetectedActivity activity = handleDetectedActivities(result.getProbableActivities());
+            Intent broadcastIntent = new Intent();
+            broadcastIntent.setAction(MainActivity.ACTIVITY_RESULT);
+            broadcastIntent.addCategory(Intent.CATEGORY_DEFAULT);
+            broadcastIntent.putExtra(RESULT, activity);
+            sendBroadcast(broadcastIntent);
         }
     }
 
-    private void handleDetectedActivities(List<DetectedActivity> probableActivities) {
+    private DetectedActivity  handleDetectedActivities(List<DetectedActivity> probableActivities) {
+        DetectedActivity def = null;
+        int currentMax = -100;
         for (DetectedActivity activity : probableActivities) {
             switch (activity.getType()) {
                 case DetectedActivity.IN_VEHICLE: {
@@ -50,10 +58,18 @@ public class ActivityRecognizedService extends IntentService {
                 }
                 case DetectedActivity.RUNNING: {
                     Log.e("ActivityRecogition", "Running: " + activity.getConfidence());
+                    if (activity.getConfidence() > currentMax) {
+                        currentMax = activity.getConfidence();
+                        def = activity;
+                    }
                     break;
                 }
                 case DetectedActivity.STILL: {
                     Log.e("ActivityRecogition", "Still: " + activity.getConfidence());
+                    if (activity.getConfidence() > currentMax) {
+                        currentMax = activity.getConfidence();
+                        def = activity;
+                    }
                     break;
                 }
                 case DetectedActivity.TILTING: {
@@ -69,6 +85,10 @@ public class ActivityRecognizedService extends IntentService {
                         builder.setContentTitle(getString(R.string.app_name));
                         NotificationManagerCompat.from(this).notify(0, builder.build());
                     }
+                    if (activity.getConfidence() > currentMax) {
+                        currentMax = activity.getConfidence();
+                        def = activity;
+                    }
                     break;
                 }
                 case DetectedActivity.UNKNOWN: {
@@ -78,6 +98,7 @@ public class ActivityRecognizedService extends IntentService {
             }
 
         }
+        return def;
     }
 }
 
