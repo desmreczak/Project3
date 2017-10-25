@@ -21,7 +21,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.view.MenuItem;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -31,6 +30,7 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.ActivityRecognition;
 
+import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -45,6 +45,7 @@ import io.reactivex.Observable;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Consumer;
 
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
@@ -59,7 +60,6 @@ import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
@@ -87,6 +87,7 @@ public class MainActivity extends AppCompatActivity
     private static int MAX_SIZE = 1000;
     public static GoogleApiClient mApiClient;
     TextView textView;
+    TextView countTextView;
     PowerManager.WakeLock wakeLock = null;
     double[] gravity = new double[]{0.0, 0.0, 0.0};
     int count = 0;
@@ -168,7 +169,7 @@ public class MainActivity extends AppCompatActivity
         registerReceiver(receiver, filter);
         imageView = (ImageView) findViewById(R.id.activityImageView);
         textView = (TextView) findViewById(R.id.activityTextView);
-
+        countTextView = (TextView) findViewById(R.id.countTextView);
 
 
     }
@@ -179,6 +180,7 @@ public class MainActivity extends AppCompatActivity
 
         // Disconnect GoogleApiClient when stopping Activity
         mApiClient.disconnect();
+        unregisterReceiver(receiver);
     }
 
     @Override
@@ -217,7 +219,74 @@ public class MainActivity extends AppCompatActivity
         Log.w(TAG, "onConnectionFailed()");
     }
 
+    private Consumer<Long> callback = l -> {
+        if (startCount) {
+            List<Tuple3d> all = getLast(50, index, new ArrayList<>(averageAcceleration));
+            List<Tuple3d> current = getLast(3, all.size() - 1, all);
+            //get max from the last 50 data points
+            Tuple3d max = Observable.just(all)
+                    .flatMapIterable(v -> v).reduce((tuple3d, tuple3d2) -> new Vector3d(Math.max(tuple3d.x, tuple3d2.x),
+                            Math.max(tuple3d.y, tuple3d2.y),
+                            Math.max(tuple3d.z, tuple3d2.z))).blockingGet();
 
+            //get min from the last 50 data points
+            Tuple3d min = Observable.just(all)
+                    .flatMapIterable(v -> v).reduce((tuple3d, tuple3d2) -> new Vector3d(Math.min(tuple3d.x, tuple3d2.x),
+                            Math.min(tuple3d.y, tuple3d2.y),
+                            Math.min(tuple3d.z, tuple3d2.z))).blockingGet();
+
+
+            //calculate average from max min
+            Tuple3d ave = new Vector3d();
+            ave.sub(max, min);
+            ave.scale(1.0 / 2);
+
+
+            //choose axis
+            Axis axis;
+            if (ave.x >= ave.y && ave.x >= ave.z) {
+                axis = Axis.x;
+            } else if (ave.y >= ave.x && ave.y >= ave.z) {
+                axis = Axis.y;
+            } else axis = Axis.z;
+
+
+            //calculate local max and local min from lAST 3 DATA POINTS
+            Tuple3d localMax = Observable.just(current)
+                    .flatMapIterable(v -> v)
+                    .reduce((a, b) -> new Vector3d(Math.max(a.x, b.x),
+                            Math.max(a.y, b.y),
+                            Math.max(a.z, b.z))).blockingGet();
+
+            Tuple3d localMin = Observable.just(current)
+                    .flatMapIterable(v -> v)
+                    .reduce((a, b) -> new Vector3d(Math.min(a.x, b.x),
+                            Math.min(a.y, b.y),
+                            Math.min(a.z, b.z))).blockingGet();
+
+            //increment count if satisfy some small conditions. Quite basic :D
+            switch (axis) {
+                case x:
+                    if (localMax.x >= ave.x && localMin.x <= ave.x) {
+                        if (localMax.x - localMin.x > THRESHOLD) count += 1;
+                    }
+                    break;
+                case y:
+                    if (localMax.y >= ave.y && localMin.y <= ave.y) {
+                        if (localMax.y - localMin.y > THRESHOLD) count += 1;
+                    }
+                    break;
+                case z:
+                    if (localMax.z >= ave.z && localMin.z <= ave.z) {
+                        if (localMax.z - localMin.z > THRESHOLD) count += 1;
+                    }
+                    break;
+            }
+
+
+        }
+
+    };
 
     @Override
     protected void onResume() {
@@ -226,77 +295,23 @@ public class MainActivity extends AppCompatActivity
             mSensorManager.registerListener(this, mSensor, SensorManager.SENSOR_DELAY_UI); //60000 micro miliseconds delay
         }
         //update text every 200 ms
-//        task.add(Observable.interval(200, TimeUnit.MILLISECONDS).observeOn(AndroidSchedulers.mainThread()).subscribe(v -> textView.setText(Integer.toString(count))));
+        task.add(Observable.interval(200, TimeUnit.MILLISECONDS).observeOn(AndroidSchedulers.mainThread()).subscribe(v -> countTextView.setText("Step count: " + Integer.toString(count))));
 
         //check step every 200 ms
-        updateStep = Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(l -> {
-            if (startCount) {
-                List<Tuple3d> all = getLast(50, index, new ArrayList<>(averageAcceleration));
-                List<Tuple3d> current = getLast(3, all.size() - 1, all);
-                //get max from the last 50 data points
-                Tuple3d max = Observable.just(all)
-                        .flatMapIterable(v -> v).reduce((tuple3d, tuple3d2) -> new Vector3d(Math.max(tuple3d.x, tuple3d2.x),
-                                Math.max(tuple3d.y, tuple3d2.y),
-                                Math.max(tuple3d.z, tuple3d2.z))).blockingGet();
-
-                //get min from the last 50 data points
-                Tuple3d min = Observable.just(all)
-                        .flatMapIterable(v -> v).reduce((tuple3d, tuple3d2) -> new Vector3d(Math.min(tuple3d.x, tuple3d2.x),
-                                Math.min(tuple3d.y, tuple3d2.y),
-                                Math.min(tuple3d.z, tuple3d2.z))).blockingGet();
-
-
-                //calculate average from max min
-                Tuple3d ave = new Vector3d();
-                ave.sub(max, min);
-                ave.scale(1.0 / 2);
-
-
-                //choose axis
-                Axis axis;
-                if (ave.x >= ave.y && ave.x >= ave.z) {
-                    axis = Axis.x;
-                } else if (ave.y >= ave.x && ave.y >= ave.z) {
-                    axis = Axis.y;
-                } else axis = Axis.z;
-
-
-                //calculate local max and local min from lAST 3 DATA POINTS
-                Tuple3d localMax = Observable.just(current)
-                        .flatMapIterable(v -> v)
-                        .reduce((a, b) -> new Vector3d(Math.max(a.x, b.x),
-                                Math.max(a.y, b.y),
-                                Math.max(a.z, b.z))).blockingGet();
-
-                Tuple3d localMin = Observable.just(current)
-                        .flatMapIterable(v -> v)
-                        .reduce((a, b) -> new Vector3d(Math.min(a.x, b.x),
-                                Math.min(a.y, b.y),
-                                Math.min(a.z, b.z))).blockingGet();
-
-                //increment count if satisfy some small conditions. Quite basic :D
-                switch (axis) {
-                    case x:
-                        if (localMax.x >= ave.x && localMin.x <= ave.x) {
-                            if (localMax.x - localMin.x > THRESHOLD) count += 1;
-                        }
-                        break;
-                    case y:
-                        if (localMax.y >= ave.y && localMin.y <= ave.y) {
-                            if (localMax.y - localMin.y > THRESHOLD) count += 1;
-                        }
-                        break;
-                    case z:
-                        if (localMax.z >= ave.z && localMin.z <= ave.z) {
-                            if (localMax.z - localMin.z > THRESHOLD) count += 1;
-                        }
-                        break;
-                }
-
-
+        if (currentActivity == null)
+        updateStep = Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(callback);
+        else {
+            switch (currentActivity.getType()) {
+                case DetectedActivity.STILL:
+                    updateStep = null;
+                    break;
+                case DetectedActivity.RUNNING:
+                    updateStep = Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(callback);
+                    break;
+                case DetectedActivity.WALKING:
+                    updateStep = Observable.interval(1000, TimeUnit.MILLISECONDS).subscribe(callback);
             }
-
-        });
+        }
 
     }
 
@@ -343,7 +358,7 @@ public class MainActivity extends AppCompatActivity
     public long activityStart = 0;
     public static String ACTIVITY_RESULT = "result";
 
-    class Receiver extends BroadcastReceiver {
+    public class Receiver extends BroadcastReceiver {
 
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -351,17 +366,48 @@ public class MainActivity extends AppCompatActivity
             if (currentActivity == null) {
                 currentActivity = activity;
                 activityStart = Calendar.getInstance().getTime().getTime();
-                textView.setText("You are in " + activity.toString() + " mode");
+                textView.setText("You are " + fromActivity(activity.getType()));
                 imageView.setImageDrawable(getDrawable(getDrawableFrom(currentActivity)));
-            } else if (currentActivity != activity) {
+            } else if (currentActivity.getType() != activity.getType()) {
                 long current = Calendar.getInstance().getTime().getTime();
-                Toast.makeText(MainActivity.this, String.format("You just %s for %d seconds", currentActivity.toString(), current - activityStart ), Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, String.format("You were %s for %d seconds",fromActivity(currentActivity.getType()), (current - activityStart) / 1000 ), Toast.LENGTH_SHORT).show();
                 currentActivity = activity;
                 activityStart = current;
-                textView.setText("You are in " + activity.toString() + " mode");
+                textView.setText("You are " + fromActivity(activity.getType()));
                 imageView.setImageDrawable(getDrawable(getDrawableFrom(currentActivity)));
+                if (updateStep != null) {
+                    updateStep.dispose();
+                }
+                updateStep = initUpdateStep(activity);
+
 
             }
+        }
+    }
+
+    private Disposable initUpdateStep(DetectedActivity activity) {
+        switch (activity.getType()) {
+            case DetectedActivity.RUNNING:
+                return Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(callback);
+            case DetectedActivity.STILL:
+                return null;
+            case DetectedActivity.WALKING:
+                return Observable.interval(1000, TimeUnit.MILLISECONDS).subscribe(callback);
+            default:
+                return null;
+        }
+    }
+
+    static String fromActivity(int activity) {
+        switch (activity) {
+            case DetectedActivity.RUNNING:
+                return "running";
+            case DetectedActivity.WALKING:
+                return "walking";
+            case DetectedActivity.STILL:
+                return "still";
+            default:
+                return "still";
         }
     }
 

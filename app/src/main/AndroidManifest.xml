@@ -28,6 +28,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service android:name=".ActivityRecognizedService" />
+        <service android:name=".GeofenceTrasitionService" />
+        <receiver android:name=".MainActivity$Receiver" />
     </application>
 
 </manifest>
