@@ -29,7 +29,7 @@
             </intent-filter>
         </activity>
         <service android:name=".ActivityRecognizedService" />
-        <service android:name=".GeofenceTrasitionService" />
+        <service android:name=".GeofenceTransitionService" />
         <receiver android:name=".MainActivity$Receiver" />
     </application>
 

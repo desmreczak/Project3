@@ -30,11 +30,9 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.ActivityRecognition;
 
-import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -79,7 +77,7 @@ public class MainActivity extends AppCompatActivity
         GoogleMap.OnMapClickListener,
         GoogleMap.OnMarkerClickListener,
         ResultCallback<Status>
-         {
+{
 
     //======================== Step counting below ================================
     private final static Double THRESHOLD = 0.2;
@@ -163,8 +161,11 @@ public class MainActivity extends AppCompatActivity
         // initialize GoogleMaps
         initGMaps();
 
-        IntentFilter filter = new IntentFilter(ACTIVITY_RESULT);
+        IntentFilter filter = new IntentFilter();
         filter.addCategory(Intent.CATEGORY_DEFAULT);
+        filter.addAction("result");
+        filter.addAction("geofence");
+
         receiver = new Receiver();
         registerReceiver(receiver, filter);
         imageView = (ImageView) findViewById(R.id.activityImageView);
@@ -195,7 +196,7 @@ public class MainActivity extends AppCompatActivity
         if (wakeLock != null) wakeLock.release();
         task.clear();
         if (updateStep != null)
-        updateStep.dispose();
+            updateStep.dispose();
     }
 
     @Override
@@ -205,8 +206,8 @@ public class MainActivity extends AppCompatActivity
         PendingIntent pendingIntent = PendingIntent.getService( this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT );
         ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates( mApiClient, 3000, pendingIntent );
         getLastKnownLocation();
-        markerForGeofence(fullerLatLng);
-        markerForGeofence(libraryLatLng);
+        markerForGeofence(fullerLatLng, FULLER_GEOFENCE_ID);
+        markerForGeofence(libraryLatLng, LIBRARY_GEOFENCE_ID);
     }
 
     @Override
@@ -299,7 +300,7 @@ public class MainActivity extends AppCompatActivity
 
         //check step every 200 ms
         if (currentActivity == null)
-        updateStep = Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(callback);
+            updateStep = Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(callback);
         else {
             switch (currentActivity.getType()) {
                 case DetectedActivity.STILL:
@@ -362,25 +363,41 @@ public class MainActivity extends AppCompatActivity
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            DetectedActivity activity = intent.getParcelableExtra(ActivityRecognizedService.RESULT);
-            if (currentActivity == null) {
-                currentActivity = activity;
-                activityStart = Calendar.getInstance().getTime().getTime();
-                textView.setText("You are " + fromActivity(activity.getType()));
-                imageView.setImageDrawable(getDrawable(getDrawableFrom(currentActivity)));
-            } else if (currentActivity.getType() != activity.getType()) {
-                long current = Calendar.getInstance().getTime().getTime();
-                Toast.makeText(MainActivity.this, String.format("You were %s for %d seconds",fromActivity(currentActivity.getType()), (current - activityStart) / 1000 ), Toast.LENGTH_SHORT).show();
-                currentActivity = activity;
-                activityStart = current;
-                textView.setText("You are " + fromActivity(activity.getType()));
-                imageView.setImageDrawable(getDrawable(getDrawableFrom(currentActivity)));
-                if (updateStep != null) {
-                    updateStep.dispose();
-                }
-                updateStep = initUpdateStep(activity);
-
-
+            switch(intent.getAction()) {
+                case "result":
+                    DetectedActivity activity = intent.getParcelableExtra(ActivityRecognizedService.RESULT);
+                    if (currentActivity == null) {
+                        currentActivity = activity;
+                        activityStart = Calendar.getInstance().getTime().getTime();
+                        textView.setText("You are " + fromActivity(activity.getType()));
+                        imageView.setImageDrawable(getDrawable(getDrawableFrom(currentActivity)));
+                    } else if (currentActivity.getType() != activity.getType()) {
+                        long current = Calendar.getInstance().getTime().getTime();
+                        Toast.makeText(MainActivity.this, String.format("You were %s for %d seconds",fromActivity(currentActivity.getType()), (current - activityStart) / 1000 ), Toast.LENGTH_SHORT).show();
+                        currentActivity = activity;
+                        activityStart = current;
+                        textView.setText("You are " + fromActivity(activity.getType()));
+                        imageView.setImageDrawable(getDrawable(getDrawableFrom(currentActivity)));
+                        if (updateStep != null) {
+                            updateStep.dispose();
+                        }
+                        updateStep = initUpdateStep(activity);
+                    }
+                    break;
+                case "geofence":
+                    //Entering,FULLER
+                    String gfd = (String)intent.getExtras().get("geofenceTransitionDetails");
+                    String[] split = gfd.split(",");
+                    boolean e = split[0].equals("Entering");
+                    switch(split[1]) {
+                        case "FULLER":
+                            inFuller = e;
+                            break;
+                        case "LIBRARY":
+                            inLib = e;
+                            break;
+                    }
+                    break;
             }
         }
     }
@@ -443,18 +460,29 @@ public class MainActivity extends AppCompatActivity
     private PendingIntent geoFencePendingIntent;
     private Circle geoFenceLimits;
 
+    public void setInFuller(boolean b) {
+        this.inFuller = b;
+    }
+
+    public void setInLib(boolean b) {
+        this.inLib = b;
+    }
+
     // Defined in mili seconds.
     // This number in extremely low, and should be used only for debug
     private final int UPDATE_INTERVAL =  3 * 60 * 1000; // 3 minutes
     private final int FASTEST_INTERVAL = 30 * 1000;  // 30 secs
     private static final long GEO_DURATION = 60 * 60 * 1000;
-    private static final String GEOFENCE_REQ_ID = "My Geofence";
-    private static final float GEOFENCE_RADIUS = 20.0f; // in meters
+    private static final String LIBRARY_GEOFENCE_ID = "LIBRARY";
+    private static final String FULLER_GEOFENCE_ID = "FULLER";
+    private static final float GEOFENCE_RADIUS = 34.0f; // in meters
     private final int GEOFENCE_REQ_CODE = 0;
     private static final String NOTIFICATION_MSG = "NOTIFICATION MSG";
     private final int REQ_PERMISSION = 999;
-    private LatLng libraryLatLng = new LatLng(42.274339, -71.806580);
-    private LatLng fullerLatLng = new LatLng(42.274979, -71.806607);
+    private LatLng libraryLatLng = new LatLng(42.274339,-71.806580);
+    private LatLng fullerLatLng = new LatLng(42.274979,-71.806607);
+    private boolean inFuller = false;
+    private boolean inLib = false;
 
 
     // Initialize GoogleMaps
@@ -583,7 +611,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     // Create a marker for the geofence creation
-    private void markerForGeofence(LatLng latLng) {
+    private void markerForGeofence(LatLng latLng, String gid) {
         Log.i(TAG, "markerForGeofence("+latLng+")");
         String title = latLng.latitude + ", " + latLng.longitude;
         // Define marker options
@@ -597,15 +625,15 @@ public class MainActivity extends AppCompatActivity
 //                geoFenceMarker.remove();
 
             geoFenceMarker = map.addMarker(markerOptions);
-            startGeofence();
+            startGeofence(gid);
         }
     }
 
     // Create a Geofence
-    private Geofence createGeofence( LatLng latLng, float radius ) {
+    private Geofence createGeofence( LatLng latLng, float radius, String gid ) {
         Log.i(TAG, "createGeofence");
         return new Geofence.Builder()
-                .setRequestId(GEOFENCE_REQ_ID)
+                .setRequestId(gid)
                 .setCircularRegion( latLng.latitude, latLng.longitude, radius)
                 .setExpirationDuration( GEO_DURATION )
                 .setTransitionTypes( Geofence.GEOFENCE_TRANSITION_ENTER
@@ -627,7 +655,7 @@ public class MainActivity extends AppCompatActivity
         if ( geoFencePendingIntent != null )
             return geoFencePendingIntent;
 
-        Intent intent = new Intent( this, GeofenceTrasitionService.class);
+        Intent intent = new Intent( this, GeofenceTransitionService.class);
         return PendingIntent.getService(
                 this, GEOFENCE_REQ_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT );
     }
@@ -670,10 +698,10 @@ public class MainActivity extends AppCompatActivity
     }
 
     // Start Geofence creation process
-    private void startGeofence() {
+    private void startGeofence(String gid) {
         Log.i(TAG, "startGeofence()");
         if( geoFenceMarker != null ) {
-            Geofence geofence = createGeofence( geoFenceMarker.getPosition(), GEOFENCE_RADIUS );
+            Geofence geofence = createGeofence( geoFenceMarker.getPosition(), GEOFENCE_RADIUS, gid );
             GeofencingRequest geofenceRequest = createGeofenceRequest( geofence );
             addGeofence( geofenceRequest );
         } else {
