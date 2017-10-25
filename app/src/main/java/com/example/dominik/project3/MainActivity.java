@@ -166,7 +166,7 @@ public class MainActivity extends AppCompatActivity
 
         IntentFilter filter = new IntentFilter();
         filter.addCategory(Intent.CATEGORY_DEFAULT);
-        filter.addAction("result");
+        filter.addAction(ACTIVITY_RESULT);
         filter.addAction("geofence");
 
         receiver = new Receiver();
@@ -317,9 +317,10 @@ public class MainActivity extends AppCompatActivity
         task.add(Observable.interval(200, TimeUnit.MILLISECONDS).observeOn(AndroidSchedulers.mainThread()).subscribe(v -> countTextView.setText("Step count: " + Integer.toString(count))));
 
         //check step every 200 ms
-        if (currentActivity == null)
-            updateStep = Observable.interval(200, TimeUnit.MILLISECONDS).subscribe(callback);
-        else {
+        if (currentActivity == null) {
+            if (updateStep != null) updateStep.dispose();
+            updateStep = null;
+        } else {
             switch (currentActivity.getType()) {
                 case DetectedActivity.STILL:
                     updateStep = null;
@@ -425,19 +426,23 @@ public class MainActivity extends AppCompatActivity
     public int prevStepCount = -100000;
 
     public void onStepIncrease() {
-        if (count - prevStepCount == 6) {
-            if (inFuller) {
-                fullerCount++;
-                fullerCountTextView.setText(Integer.toString(fullerCount));
-                Toast.makeText(this, "You have taken 6 steps inside fuller", Toast.LENGTH_LONG).show();
-            }
-            if (inLib) {
-                libraryCount++;
-                libraryCountTextView.setText(Integer.toString(libraryCount));
+        Observable.fromCallable(() -> {
 
-                Toast.makeText(this, "You have taken 6 steps inside library", Toast.LENGTH_LONG).show();
+            if (count - prevStepCount == 6) {
+                if (inFuller) {
+                    fullerCount++;
+                    fullerCountTextView.setText(Integer.toString(fullerCount));
+                    Toast.makeText(this, "You have taken 6 steps inside fuller", Toast.LENGTH_LONG).show();
+                }
+                if (inLib) {
+                    libraryCount++;
+                    libraryCountTextView.setText(Integer.toString(libraryCount));
+
+                    Toast.makeText(this, "You have taken 6 steps inside library", Toast.LENGTH_LONG).show();
+                }
             }
-        }
+            return 1;
+        }).subscribeOn(AndroidSchedulers.mainThread()).subscribe();
     }
 
     private Disposable initUpdateStep(DetectedActivity activity) {
@@ -518,7 +523,7 @@ public class MainActivity extends AppCompatActivity
     private static final String NOTIFICATION_MSG = "NOTIFICATION MSG";
     private final int REQ_PERMISSION = 999;
     private LatLng libraryLatLng = new LatLng(42.274339,-71.806580);
-    private LatLng fullerLatLng = new LatLng(42.274979,-71.806607);
+    private LatLng fullerLatLng = new LatLng(42.275000,-71.806600);
     private boolean inFuller = false;
     private boolean inLib = false;
 
