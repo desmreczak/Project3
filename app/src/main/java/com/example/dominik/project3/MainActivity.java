@@ -191,6 +191,7 @@ public class MainActivity extends AppCompatActivity
         // Disconnect GoogleApiClient when stopping Activity
         mApiClient.disconnect();
         unregisterReceiver(receiver);
+        if (locationTask != null) locationTask.dispose();
     }
 
     @Override
@@ -619,7 +620,9 @@ public class MainActivity extends AppCompatActivity
                 if ( grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED ){
                     // Permission granted
-                    getLastKnownLocation();
+                    locationTask = Observable.interval(3, TimeUnit.SECONDS).subscribeOn(AndroidSchedulers.mainThread()).subscribe(v -> {
+                        getLastKnownLocation();
+                    });
 
                 } else {
                     // Permission denied
@@ -629,6 +632,8 @@ public class MainActivity extends AppCompatActivity
             }
         }
     }
+
+    Disposable locationTask = null;
 
     // App cannot work without the permissions
     private void permissionsDenied() {
