@@ -64,6 +64,7 @@ import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.vision.text.Text;
 
 public class MainActivity extends AppCompatActivity
 
@@ -86,6 +87,8 @@ public class MainActivity extends AppCompatActivity
     public static GoogleApiClient mApiClient;
     TextView textView;
     TextView countTextView;
+    TextView fullerCountTextView;
+    TextView libraryCountTextView;
     PowerManager.WakeLock wakeLock = null;
     double[] gravity = new double[]{0.0, 0.0, 0.0};
     int count = 0;
@@ -171,9 +174,15 @@ public class MainActivity extends AppCompatActivity
         imageView = (ImageView) findViewById(R.id.activityImageView);
         textView = (TextView) findViewById(R.id.activityTextView);
         countTextView = (TextView) findViewById(R.id.countTextView);
-
+        fullerCountTextView = (TextView) findViewById(R.id.fullerCountTextView);
+        libraryCountTextView = (TextView) findViewById(R.id.libraryCountTextView);
+        fullerCountTextView.setText(Integer.toString(fullerCount));
+        libraryCountTextView.setText(Integer.toString(libraryCount));
 
     }
+
+    int fullerCount = 0;
+    int libraryCount = 0;
 
     @Override
     protected void onStop() {
@@ -269,17 +278,26 @@ public class MainActivity extends AppCompatActivity
             switch (axis) {
                 case x:
                     if (localMax.x >= ave.x && localMin.x <= ave.x) {
-                        if (localMax.x - localMin.x > THRESHOLD) count += 1;
+                        if (localMax.x - localMin.x > THRESHOLD) {
+                            count += 1;
+                            onStepIncrease();
+                        }
                     }
                     break;
                 case y:
                     if (localMax.y >= ave.y && localMin.y <= ave.y) {
-                        if (localMax.y - localMin.y > THRESHOLD) count += 1;
+                        if (localMax.y - localMin.y > THRESHOLD) {
+                            count += 1;
+                            onStepIncrease();
+                        }
                     }
                     break;
                 case z:
                     if (localMax.z >= ave.z && localMin.z <= ave.z) {
-                        if (localMax.z - localMin.z > THRESHOLD) count += 1;
+                        if (localMax.z - localMin.z > THRESHOLD) {
+                            count += 1;
+                            onStepIncrease();
+                        }
                     }
                     break;
             }
@@ -392,12 +410,32 @@ public class MainActivity extends AppCompatActivity
                     switch(split[1]) {
                         case "FULLER":
                             inFuller = e;
+                            prevStepCount = count;
                             break;
                         case "LIBRARY":
                             inLib = e;
+                            prevStepCount = count;
                             break;
                     }
                     break;
+            }
+        }
+    }
+
+    public int prevStepCount = -100000;
+
+    public void onStepIncrease() {
+        if (count - prevStepCount == 6) {
+            if (inFuller) {
+                fullerCount++;
+                fullerCountTextView.setText(Integer.toString(fullerCount));
+                Toast.makeText(this, "You have taken 6 steps inside fuller", Toast.LENGTH_LONG).show();
+            }
+            if (inLib) {
+                libraryCount++;
+                libraryCountTextView.setText(Integer.toString(libraryCount));
+
+                Toast.makeText(this, "You have taken 6 steps inside library", Toast.LENGTH_LONG).show();
             }
         }
     }
