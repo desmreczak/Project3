@@ -215,7 +215,11 @@ public class MainActivity extends AppCompatActivity
         Intent intent = new Intent( this, ActivityRecognizedService.class );
         PendingIntent pendingIntent = PendingIntent.getService( this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT );
         ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates( mApiClient, 3000, pendingIntent );
-        getLastKnownLocation();
+        if (locationTask != null) locationTask.dispose();
+        locationTask = Observable.interval(3, TimeUnit.SECONDS).subscribeOn(AndroidSchedulers.mainThread()).observeOn(AndroidSchedulers.mainThread())
+                .subscribe(v -> {
+            getLastKnownLocation();
+        });
         markerForGeofence(fullerLatLng, FULLER_GEOFENCE_ID);
         markerForGeofence(libraryLatLng, LIBRARY_GEOFENCE_ID);
     }
@@ -620,7 +624,8 @@ public class MainActivity extends AppCompatActivity
                 if ( grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED ){
                     // Permission granted
-                    locationTask = Observable.interval(3, TimeUnit.SECONDS).subscribeOn(AndroidSchedulers.mainThread()).subscribe(v -> {
+                    if (locationTask != null) locationTask.dispose();
+                    locationTask = Observable.interval(3, TimeUnit.SECONDS).subscribeOn(AndroidSchedulers.mainThread()).observeOn(AndroidSchedulers.mainThread()).subscribe(v -> {
                         getLastKnownLocation();
                     });
 
@@ -640,6 +645,7 @@ public class MainActivity extends AppCompatActivity
         Log.w(TAG, "permissionsDenied()");
     }
 
+    boolean hasZoom = false;
     // Create a Location Marker
     private void markerLocation(LatLng latLng) {
         Log.i(TAG, "markerLocation("+latLng+")");
@@ -653,8 +659,10 @@ public class MainActivity extends AppCompatActivity
                 locationMarker.remove();
             locationMarker = map.addMarker(markerOptions);
             float zoom = 14f;
-            CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, zoom);
-            map.animateCamera(cameraUpdate);
+            if (!hasZoom) {
+                hasZoom = true;
+                CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, zoom);
+            map.animateCamera(cameraUpdate);}
         }
     }
 
